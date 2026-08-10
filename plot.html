@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@18.0.0/dist/handsontable.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@18.0.0/styles/ht-theme-main.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/handsontable@18.0.0/dist/handsontable.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plotly.js@3.7.0/dist/plotly.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+    }
+    #root {
+      display: flex;
+      flex-direction: row;
+      height: 100vh;
+    }
+    #sheet, #plots {
+      flex: 1;
+    }
+    #sheet {
+      width: 50vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #plots {
+      display: flex;
+      flex-direction: column;
+      overflow-x: clip;
+    }
+    #plots>div {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="sheet"></div>
+    <div id="plots">
+      <div id="surface-plot"></div>
+      <div id="contour-plot"></div>
+    </div>
+  </div>
+
+  <script>
+    function trimEdges(data) {
+      const notNum = n => typeof n !== "number";
+
+      let top = 0;
+      while (top < data.length && data[top].every(notNum)) top++;
+
+      let bottom = data.length - 1;
+      while (bottom >= 0 && data[bottom].every(notNum)) bottom--;
+
+      let left = 0;
+      while (left < data[0].length && data.every(row => notNum(row[left]))) left++;
+
+      let right = data[0].length - 1;
+      while (right >= 0 && data.every(row => notNum(row[right]))) right--;
+
+      return data.slice(top, bottom + 1).map(row => row.slice(left, right + 1));
+    }
+
+    function updatePlots() {
+      let newData = trimEdges(tableData).reverse();
+      if (newData.length === 0) newData = [[0]];
+      for (const plot of plots) {
+        Plotly.restyle(plot, {'z': [newData]});
+      }
+    }
+
+    const sheetElem = document.getElementById('sheet');
+    const tableData = (() => {
+      const data = localStorage.getItem("plotData");
+      if (data && location.protocol !== "file:") {
+        try {
+          return JSON.parse(data);
+        } catch(e) {
+          console.error(e);
+        }
+      }
+      return [[]];
+    })();
+    const hot = new Handsontable(sheetElem, {
+      themeName: 'ht-theme-main',
+      licenseKey: "non-commercial-and-evaluation",
+      data: tableData,
+      rowHeaders: true,
+      colHeaders: true,
+      contextMenu: [
+        'row_above', 'row_below', '---------',
+        'col_left', 'col_right', '---------',
+        'remove_row', 'remove_col', '---------',
+        'undo', 'redo', '---------',
+        'copy', 'cut'
+      ],
+      className: 'htLeft',
+      type: 'numeric',
+      minRows: 10,
+      minCols: 10,
+      minSpareRows: 1,
+      minSpareCols: 1,
+      maxRows: 100,
+      maxCols: 100,
+      afterChange(changes, source) {
+        if (source === "loadData") return;
+        localStorage.setItem("plotData", JSON.stringify(tableData));
+        setTimeout(updatePlots);
+      }
+    });
+    
+    const surfacePlot = document.getElementById("surface-plot");
+    const contourPlot = document.getElementById("contour-plot");
+    const plots = [surfacePlot, contourPlot];
+    for (const [i, type] of ['surface', 'contour'].entries()) {
+      Plotly.newPlot(plots[i], [{
+        type: type,
+      }], {
+        margin: {
+          l: 0,
+          r: 0,
+          b: 0,
+          t: 0,
+        }
+      });
+    }
+
+    updatePlots();
+  </script>
+</body>
+</html>
